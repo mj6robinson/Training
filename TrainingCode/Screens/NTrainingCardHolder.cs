@@ -1,5 +1,6 @@
 ﻿using Godot;
 using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.Models.Cards;
 using MegaCrit.Sts2.Core.Models.Relics;
 using MegaCrit.Sts2.Core.Nodes;
 using MegaCrit.Sts2.Core.Nodes.GodotExtensions;
@@ -91,16 +92,16 @@ namespace Training.TrainingCode.Screens
             _spinBox.Value = newValue;
         }
 
-        public void Filter(string filter)
+        public void Filter(Dictionary<Type, List<Func<CardModel, bool>>> filters)
         {
-            if (_cardModel.Item1.Title.Contains(filter, StringComparison.CurrentCultureIgnoreCase))
+            if (filters.All(group => group.Value.Count == 0 || group.Value.Any(filter => filter(_cardModel.Item1))))
             {
                 RootNode.Show();
             }
             else
             {
                 RootNode.Hide();
-            }         
+            }
         }
 
         private void ShowEntry(NDeckHistoryEntry entry)

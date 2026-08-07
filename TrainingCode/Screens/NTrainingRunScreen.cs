@@ -1,15 +1,16 @@
 ﻿using BaseLib.Config.UI;
 using Godot;
-using Godot.Collections;
 using MegaCrit.Sts2.addons.mega_text;
 using MegaCrit.Sts2.Core.Assets;
 using MegaCrit.Sts2.Core.Commands;
+using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Multiplayer;
 using MegaCrit.Sts2.Core.Entities.UI;
 using MegaCrit.Sts2.Core.Helpers;
 using MegaCrit.Sts2.Core.Localization;
 using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.Models.CardPools;
 using MegaCrit.Sts2.Core.Multiplayer;
 using MegaCrit.Sts2.Core.Multiplayer.Game;
 using MegaCrit.Sts2.Core.Multiplayer.Game.Lobby;
@@ -27,6 +28,7 @@ using MegaCrit.Sts2.Core.Runs;
 using MegaCrit.Sts2.Core.Saves;
 using MegaCrit.Sts2.Core.TestSupport;
 using MegaCrit.Sts2.Core.Unlocks;
+using System.Globalization;
 using Training.TrainingCode.Acts;
 using Training.TrainingCode.Config;
 using Training.TrainingCode.Modifiers;
@@ -57,7 +59,65 @@ namespace Training.TrainingCode.Screens
 
         private GridContainer _relicsContainer;
 
-        private LineEdit _cardsFilterBox;
+        private NSearchBar _searchBar;
+
+        private NCardPoolFilter _ironcladFilter;
+
+        private NCardPoolFilter _silentFilter;
+
+        private NCardPoolFilter _defectFilter;
+
+        private NCardPoolFilter _regentFilter;
+
+        private NCardPoolFilter _necrobinderFilter;
+
+        private NCardPoolFilter _colorlessFilter;
+
+        private NCardPoolFilter _ancientsFilter;
+
+        private NCardPoolFilter _miscPoolFilter;
+
+        private NCardViewSortButton _typeSorter;
+
+        private NCardTypeTickbox _attackFilter;
+
+        private NCardTypeTickbox _skillFilter;
+
+        private NCardTypeTickbox _powerFilter;
+
+        private NCardTypeTickbox _otherTypeFilter;
+
+        private NCardViewSortButton _raritySorter;
+
+        private NCardRarityTickbox _commonFilter;
+
+        private NCardRarityTickbox _uncommonFilter;
+
+        private NCardRarityTickbox _rareFilter;
+
+        private NCardRarityTickbox _otherFilter;
+
+        private NCardViewSortButton _costSorter;
+
+        private NCardCostTickbox _zeroFilter;
+
+        private NCardCostTickbox _oneFilter;
+
+        private NCardCostTickbox _twoFilter;
+
+        private NCardCostTickbox _threePlusFilter;
+
+        private NCardCostTickbox _xFilter;
+
+        private NCardViewSortButton _alphabetSorter;
+
+        private NLibraryStatTickbox _viewMultiplayerCards;
+
+        private readonly List<SortingOrders> _sortingPriority = [];
+
+        protected List<CardModel> _cards = [.. ModelDb.AllCards];
+
+        private readonly Dictionary<Type, List<Func<CardModel, bool>>> _filter = [];
 
         private GridContainer _cardsContainer;
 
@@ -67,7 +127,73 @@ namespace Training.TrainingCode.Screens
 
         public StartRunLobby Lobby => _lobby;
 
-        public static IEnumerable<string> AssetPaths => new Array<string>([_scenePath, "res://scenes/screens/char_select/char_select_button.tscn", "res://scenes/screens/custom_run/modifier_tickbox.tscn"]);
+        private Dictionary<SortingOrders, Func<CardModel, CardModel, int>> SortingAlgorithms
+        {
+            get
+            {
+                return new Dictionary<SortingOrders, Func<CardModel, CardModel, int>>
+                {
+                    {
+                        SortingOrders.RarityAscending,
+                        (a, b) => GetCardRarityComparisonValue(a).CompareTo(GetCardRarityComparisonValue(b))
+                    },
+                    {
+                        SortingOrders.CostAscending,
+                        (a, b) => a.EnergyCost.GetResolved().CompareTo(b.EnergyCost.GetResolved())
+                    },
+                    {
+                        SortingOrders.TypeAscending,
+                        (a, b) => a.Type.CompareTo(b.Type)
+                    },
+                    {
+                        SortingOrders.AlphabetAscending,
+                        (a, b) => string.Compare(a.Title, b.Title, LocManager.Instance.CultureInfo, CompareOptions.None)
+                    },
+                    {
+                        SortingOrders.RarityDescending,
+                        (a, b) => -GetCardRarityComparisonValue(a).CompareTo(GetCardRarityComparisonValue(b))
+                    },
+                    {
+                        SortingOrders.CostDescending,
+                        (a, b) => -a.EnergyCost.GetResolved().CompareTo(b.EnergyCost.GetResolved())
+                    },
+                    {
+                        SortingOrders.TypeDescending,
+                        (a, b) => -a.Type.CompareTo(b.Type)
+                    },
+                    {
+                        SortingOrders.AlphabetDescending,
+                        (a, b) => -string.Compare(a.Title, b.Title, LocManager.Instance.CultureInfo, CompareOptions.None)
+                    },
+                    {
+                        SortingOrders.Ascending,
+                        (a, b) => _cards.IndexOf(a).CompareTo(_cards.IndexOf(b))
+                    },
+                    {
+                        SortingOrders.Descending,
+                        (a, b) => -_cards.IndexOf(a).CompareTo(_cards.IndexOf(b))
+                    }
+                };
+            }
+        }
+
+        private static int GetCardRarityComparisonValue(CardModel a)
+        {
+            if (a.Rarity <= CardRarity.Ancient)
+            {
+                return (int)a.Rarity;
+            }
+
+            return a.Rarity switch
+            {
+                CardRarity.Status => 6,
+                CardRarity.Curse => 7,
+                CardRarity.Event => 8,
+                CardRarity.Quest => 9,
+                CardRarity.Token => 10,
+                _ => throw new ArgumentOutOfRangeException(nameof(a), a, null),
+            };
+        }
 
         protected override Control InitialFocusedControl => _charButtonContainer.GetChild<Control>(0);
 #pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider adding the 'required' modifier or declaring as nullable.
@@ -126,19 +252,6 @@ namespace Training.TrainingCode.Screens
             };
             relicsScrollContainer.AddChild(relicsContainer);
 
-
-
-            //var cardsFilter = new LineEdit()
-            //{
-            //    Name = "CardsFilter",
-            //    AnchorLeft = 0,
-            //    AnchorTop = 0,
-            //    AnchorRight = 1,
-            //    OffsetLeft = 0,
-            //    OffsetTop = 150,
-            //    OffsetRight = -200,
-            //    PlaceholderText = "Filter"
-            //};
             var cardBox = new HBoxContainer()
             {
                 Name = "CardBox",
@@ -146,49 +259,36 @@ namespace Training.TrainingCode.Screens
                 AnchorTop = 0,
                 AnchorBottom = 1,
                 AnchorRight = 1,
-                OffsetLeft = 50,
-                OffsetTop = 0,
+                OffsetLeft = -50,
+                OffsetTop = 25,
                 OffsetRight = -50,
-                OffsetBottom = -200,
+                OffsetBottom = -175,
             };
             customRun.GetNode("RightContainer").AddChild(cardBox);
-
-            var cardLibrary = NCardLibrary.Create();
-            var sideBar = cardLibrary.GetNode<Control>("Sidebar");
-            cardLibrary.RemoveChild(sideBar);
-            sideBar.AnchorTop = 0;
-            sideBar.AnchorBottom = 1;
-            sideBar.OffsetRight = 288;
-            sideBar.SetAnchorsPreset(LayoutPreset.FullRect);
-            sideBar.GrowVertical = GrowDirection.Both;
-            cardBox.AddChild(sideBar);
-
-            var styleBox = new StyleBoxFlat
-            {
-                BgColor = new Color(0, 0, 0, 0),
-                BorderColor = new Color(1, 1, 1, 1) 
-            };
-            styleBox.SetBorderWidthAll(2);
 
             var cardsScrollContainer = new ScrollContainer
             {
                 Name = "CardsScroll",
-                //AnchorLeft = 0,
-                //AnchorRight = 1,
-                AnchorTop = 0,
-                AnchorBottom = 1,
-                SizeFlagsHorizontal = SizeFlags.ShrinkEnd,
+                SizeFlagsHorizontal = SizeFlags.ExpandFill,
                 SizeFlagsVertical = SizeFlags.ExpandFill,
                 VerticalScrollMode = ScrollContainer.ScrollMode.Auto,
                 HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled
             };
-            cardsScrollContainer.AddThemeStyleboxOverride("panel", styleBox);
             cardBox.AddChild(cardsScrollContainer);
+
+            var cardLibrary = NCardLibrary.Create();
+            var sideBar = cardLibrary.GetNode<Control>("Sidebar");
+            cardLibrary.RemoveChild(sideBar);
+
+            RemoveNode(sideBar, "MarginContainer/BottomVBox/Upgrades");
+            RemoveNode(sideBar, "MarginContainer/BottomVBox/Stats");
+            sideBar.CustomMinimumSize = new Vector2(288, 1);
+            cardBox.AddChild(sideBar);
 
             var cardsContainer = new GridContainer
             {
                 Name = "CardsContainer",
-                Columns = 1,
+                Columns = 2,
                 SizeFlagsHorizontal = SizeFlags.ExpandFill,
             };
             cardsContainer.AddThemeConstantOverride("h_separation", 32);
@@ -203,7 +303,7 @@ namespace Training.TrainingCode.Screens
                 AnchorBottom = 1,
                 OffsetLeft = 0,
                 OffsetTop = -150,
-                OffsetRight = 0,
+                OffsetRight = -25,
                 OffsetBottom = -50,
                 SizeFlagsHorizontal = SizeFlags.ExpandFill
             };
@@ -237,11 +337,32 @@ namespace Training.TrainingCode.Screens
             node?.GetParent()?.RemoveChild(node);
         }
 
-        private void FilterCards(string filter)
+        private void FilterCards(Type type, bool selected, Func<CardModel, bool> cardPoolPredicate)
+        {
+            if (!_filter.ContainsKey(type)) _filter.Add(type, []);
+            if (_filter[type] == null) _filter[type] = [];
+            if (selected)
+            {
+                _filter[type].Add(cardPoolPredicate);
+            }
+            else
+            {
+                _filter[type].Remove(cardPoolPredicate);
+            }
+            FilterCards();
+        }
+
+        private void FilterCards(Func<CardModel, bool> cardPoolPredicate)
+        {
+            _filter[typeof(string)] = [cardPoolPredicate];
+            FilterCards();
+        }
+
+        private void FilterCards()
         {
             foreach (NTrainingCardHolder holder in _cardsContainer.GetChildrenRecursive<PanelContainer>().Where(holder => holder.HasMeta("controller")).Select(holder => (NTrainingCardHolder)holder.GetMeta("controller")))
             {
-                holder.Filter(filter);
+                holder.Filter(_filter);
             }
         }
 
@@ -263,7 +384,25 @@ namespace Training.TrainingCode.Screens
 
         private void RefreshCards()
         {
-            foreach (var card in ModelDb.AllCards)
+            foreach (Node child in _cardsContainer.GetChildrenRecursive<PanelContainer>().Where(holder => holder.HasMeta("controller")))
+            {
+                child.QueueFree();
+            }
+
+            _cards.Sort((x, y) =>
+                {
+                    foreach (var item in _sortingPriority)
+                    {
+                        int num = SortingAlgorithms[item](x, y);
+                        if (num != 0)
+                        {
+                            return num;
+                        }
+                    }
+                    return x.Id.CompareTo(y.Id);
+                });
+
+            foreach (var card in _cards)
             {
                 var holder = new NTrainingCardHolder(new Tuple<CardModel, bool>(card, false));
                 _cardsContainer.AddChild(holder.RootNode);
@@ -273,6 +412,7 @@ namespace Training.TrainingCode.Screens
                     _cardsContainer.AddChild(holderPlus.RootNode);
                 }
             }
+            FilterCards();
         }
 
         private List<Tuple<CardModel, bool>> GetSelectedCards()
@@ -342,8 +482,119 @@ namespace Training.TrainingCode.Screens
             _relicsFilterBox.TextChanged += FilterRelics;
             _relicsContainer = GetNode<GridContainer>("LeftContainer/RelicsScroll/RelicsContainer");
 
-            //_cardsFilterBox = GetNode<LineEdit>("RightContainer/CardsFilter");
-            //_cardsFilterBox.TextChanged += FilterCards;
+            _searchBar = GetNode<NSearchBar>("RightContainer/CardBox/Sidebar/MarginContainer/TopVBox/SearchBar");
+            _searchBar.Connect(NSearchBar.SignalName.QueryChanged, Callable.From<string>(stringFilter => FilterCards(card => card.Title.Contains(stringFilter))));
+            _searchBar.Connect(NSearchBar.SignalName.QuerySubmitted, Callable.From<string>(stringFilter => FilterCards(card => card.Title.Contains(stringFilter))));
+
+            _ironcladFilter = GetNode<NCardPoolFilter>("RightContainer/CardBox/Sidebar/MarginContainer/TopVBox/PoolFilters/IroncladPool");
+            _silentFilter = GetNode<NCardPoolFilter>("RightContainer/CardBox/Sidebar/MarginContainer/TopVBox/PoolFilters/SilentPool");
+            _defectFilter = GetNode<NCardPoolFilter>("RightContainer/CardBox/Sidebar/MarginContainer/TopVBox/PoolFilters/DefectPool");
+            _regentFilter = GetNode<NCardPoolFilter>("RightContainer/CardBox/Sidebar/MarginContainer/TopVBox/PoolFilters/RegentPool");
+            _necrobinderFilter = GetNode<NCardPoolFilter>("RightContainer/CardBox/Sidebar/MarginContainer/TopVBox/PoolFilters/NecrobinderPool");
+            _colorlessFilter = GetNode<NCardPoolFilter>("RightContainer/CardBox/Sidebar/MarginContainer/TopVBox/PoolFilters/ColorlessPool");
+            _ancientsFilter = GetNode<NCardPoolFilter>("RightContainer/CardBox/Sidebar/MarginContainer/TopVBox/PoolFilters/AncientsPool");
+            _miscPoolFilter = GetNode<NCardPoolFilter>("RightContainer/CardBox/Sidebar/MarginContainer/TopVBox/PoolFilters/MiscPool");
+
+            _ironcladFilter.IsSelected = false;
+            _ironcladFilter.Connect(NCardPoolFilter.SignalName.Toggled, Callable.From<NCardPoolFilter>(filter => FilterCards(filter.GetType(), filter.IsSelected, card => card.Pool is IroncladCardPool)));
+            _silentFilter.Connect(NCardPoolFilter.SignalName.Toggled, Callable.From<NCardPoolFilter>(filter => FilterCards(filter.GetType(), filter.IsSelected, card => card.Pool is SilentCardPool)));
+            _defectFilter.Connect(NCardPoolFilter.SignalName.Toggled, Callable.From<NCardPoolFilter>(filter => FilterCards(filter.GetType(), filter.IsSelected, card => card.Pool is DefectCardPool)));
+            _regentFilter.Connect(NCardPoolFilter.SignalName.Toggled, Callable.From<NCardPoolFilter>(filter => FilterCards(filter.GetType(), filter.IsSelected, card => card.Pool is RegentCardPool)));
+            _necrobinderFilter.Connect(NCardPoolFilter.SignalName.Toggled, Callable.From<NCardPoolFilter>(filter => FilterCards(filter.GetType(), filter.IsSelected, card => card.Pool is NecrobinderCardPool)));
+            _colorlessFilter.Connect(NCardPoolFilter.SignalName.Toggled, Callable.From<NCardPoolFilter>(filter => FilterCards(filter.GetType(), filter.IsSelected, card => card.Pool is ColorlessCardPool)));
+            _ancientsFilter.Connect(NCardPoolFilter.SignalName.Toggled, Callable.From<NCardPoolFilter>(filter => FilterCards(filter.GetType(), filter.IsSelected, card => card.Rarity == CardRarity.Ancient)));
+            _miscPoolFilter.Connect(NCardPoolFilter.SignalName.Toggled, Callable.From<NCardPoolFilter>(filter => FilterCards(filter.GetType(), filter.IsSelected, card => (card.Rarity - CardRarity.Ancient) > 0)));
+
+            _typeSorter = GetNode<NCardViewSortButton>("RightContainer/CardBox/Sidebar/MarginContainer/TopVBox/CardTypeModule/CardTypeSorter");
+            _typeSorter.Connect(NClickableControl.SignalName.Released, Callable.From<NButton>((filter) => RefreshCards()));
+
+            _attackFilter = GetNode<NCardTypeTickbox>("RightContainer/CardBox/Sidebar/MarginContainer/TopVBox/CardTypeModule/CardTypeToggler/AttackType");
+            _skillFilter = GetNode<NCardTypeTickbox>("RightContainer/CardBox/Sidebar/MarginContainer/TopVBox/CardTypeModule/CardTypeToggler/SkillType");
+            _powerFilter = GetNode<NCardTypeTickbox>("RightContainer/CardBox/Sidebar/MarginContainer/TopVBox/CardTypeModule/CardTypeToggler/PowerType");
+            _otherTypeFilter = GetNode<NCardTypeTickbox>("RightContainer/CardBox/Sidebar/MarginContainer/TopVBox/CardTypeModule/CardTypeToggler/OtherType");
+
+            _attackFilter.IsTicked = false;
+            _skillFilter.IsTicked = false;
+            _powerFilter.IsTicked = false;
+            _otherTypeFilter.IsTicked = false;
+
+            _attackFilter.Connect(NCardTypeTickbox.SignalName.Toggled, Callable.From<NCardTypeTickbox>(filter => FilterCards(filter.GetType(), filter.IsTicked, card => card.Type == CardType.Attack)));
+            _skillFilter.Connect(NCardTypeTickbox.SignalName.Toggled, Callable.From<NCardTypeTickbox>(filter => FilterCards(filter.GetType(), filter.IsTicked, card => card.Type == CardType.Skill)));
+            _powerFilter.Connect(NCardTypeTickbox.SignalName.Toggled, Callable.From<NCardTypeTickbox>(filter => FilterCards(filter.GetType(), filter.IsTicked, card => card.Type == CardType.Power)));
+            _otherTypeFilter.Connect(NCardTypeTickbox.SignalName.Toggled, Callable.From<NCardTypeTickbox>(filter => FilterCards(filter.GetType(), filter.IsTicked, card => (card.Type - CardType.Power) > 0)));
+
+            _raritySorter = GetNode<NCardViewSortButton>("RightContainer/CardBox/Sidebar/MarginContainer/TopVBox/RarityModule/RaritySorter");
+            _raritySorter.Connect(NClickableControl.SignalName.Released, Callable.From<NButton>((filter) => RefreshCards()));
+
+            _commonFilter = GetNode<NCardRarityTickbox>("RightContainer/CardBox/Sidebar/MarginContainer/TopVBox/RarityModule/RarityToggler/CommonRarity");
+            _uncommonFilter = GetNode<NCardRarityTickbox>("RightContainer/CardBox/Sidebar/MarginContainer/TopVBox/RarityModule/RarityToggler/UncommonRarity");
+            _rareFilter = GetNode<NCardRarityTickbox>("RightContainer/CardBox/Sidebar/MarginContainer/TopVBox/RarityModule/RarityToggler/RareRarity");
+            _otherFilter = GetNode<NCardRarityTickbox>("RightContainer/CardBox/Sidebar/MarginContainer/TopVBox/RarityModule/RarityToggler/OtherRarity");
+
+            _commonFilter.IsTicked = false;
+            _uncommonFilter.IsTicked = false;
+            _rareFilter.IsTicked = false;
+            _otherFilter.IsTicked = false;
+
+            _commonFilter.Connect(NTickbox.SignalName.Toggled, Callable.From<NCardRarityTickbox>((filter) => FilterCards(filter.GetType(), filter.IsTicked, card => card.Rarity == CardRarity.Common)));
+            _uncommonFilter.Connect(NTickbox.SignalName.Toggled, Callable.From<NCardRarityTickbox>((filter) => FilterCards(filter.GetType(), filter.IsTicked, card => card.Rarity == CardRarity.Uncommon)));
+            _rareFilter.Connect(NTickbox.SignalName.Toggled, Callable.From<NCardRarityTickbox>((filter) => FilterCards(filter.GetType(), filter.IsTicked, card => card.Rarity == CardRarity.Rare)));
+            _otherFilter.Connect(NTickbox.SignalName.Toggled, Callable.From<NCardRarityTickbox>((filter) => FilterCards(filter.GetType(), filter.IsTicked, card => (card.Rarity - CardRarity.Rare) > 0)));
+
+            _costSorter = GetNode<NCardViewSortButton>("RightContainer/CardBox/Sidebar/MarginContainer/TopVBox/CostModule/CostSorter");
+            _costSorter.Connect(NClickableControl.SignalName.Released, Callable.From<NButton>((filter) => RefreshCards()));
+
+            _zeroFilter = GetNode<NCardCostTickbox>("RightContainer/CardBox/Sidebar/MarginContainer/TopVBox/CostModule/CostToggler/Cost0");
+            _oneFilter = GetNode<NCardCostTickbox>("RightContainer/CardBox/Sidebar/MarginContainer/TopVBox/CostModule/CostToggler/Cost1");
+            _twoFilter = GetNode<NCardCostTickbox>("RightContainer/CardBox/Sidebar/MarginContainer/TopVBox/CostModule/CostToggler/Cost2");
+            _threePlusFilter = GetNode<NCardCostTickbox>("RightContainer/CardBox/Sidebar/MarginContainer/TopVBox/CostModule/CostToggler/Cost3+");
+            _xFilter = GetNode<NCardCostTickbox>("RightContainer/CardBox/Sidebar/MarginContainer/TopVBox/CostModule/CostToggler/CostX");
+
+            _zeroFilter.IsTicked = false;
+            _oneFilter.IsTicked = false;
+            _twoFilter.IsTicked = false;
+            _threePlusFilter.IsTicked = false;
+            _xFilter.IsTicked = false;
+
+            _zeroFilter.Connect(NClickableControl.SignalName.Released, Callable.From<NCardCostTickbox>((filter) => FilterCards(filter.GetType(), filter.IsTicked, card => card.EnergyCost.Canonical == 0)));
+            _oneFilter.Connect(NClickableControl.SignalName.Released, Callable.From<NCardCostTickbox>((filter) => FilterCards(filter.GetType(), filter.IsTicked, card => card.EnergyCost.Canonical == 1)));
+            _twoFilter.Connect(NClickableControl.SignalName.Released, Callable.From<NCardCostTickbox>((filter) => FilterCards(filter.GetType(), filter.IsTicked, card => card.EnergyCost.Canonical == 2)));
+            _threePlusFilter.Connect(NClickableControl.SignalName.Released, Callable.From<NCardCostTickbox>((filter) => FilterCards(filter.GetType(), filter.IsTicked, card => card.EnergyCost.Canonical >= 3)));
+            _xFilter.Connect(NClickableControl.SignalName.Released, Callable.From<NCardCostTickbox>((filter) => FilterCards(filter.GetType(), filter.IsTicked, card => card.EnergyCost.CostsX || card.HasStarCostX)));
+
+            _alphabetSorter = GetNode<NCardViewSortButton>("RightContainer/CardBox/Sidebar/MarginContainer/TopVBox/AlphabetSorter");
+            _alphabetSorter.Connect(NClickableControl.SignalName.Released, Callable.From<NButton>((filter) => RefreshCards()));
+
+            _viewMultiplayerCards = GetNode<NLibraryStatTickbox>("RightContainer/CardBox/Sidebar/MarginContainer/BottomVBox/MultiplayerCards");
+            _viewMultiplayerCards.IsTicked = true;
+            _viewMultiplayerCards.Connect(NTickbox.SignalName.Toggled, Callable.From<NTickbox>((filter) => FilterCards(filter.GetType(), !filter.IsTicked, card => card.MultiplayerConstraint != CardMultiplayerConstraint.MultiplayerOnly)));
+
+            _typeSorter.SetLabel(new LocString("gameplay_ui", "SORT_TYPE").GetRawText());
+            _raritySorter.SetLabel(new LocString("gameplay_ui", "SORT_RARITY").GetRawText());
+            _costSorter.SetLabel(new LocString("gameplay_ui", "SORT_COST").GetRawText());
+            _alphabetSorter.SetLabel(new LocString("gameplay_ui", "SORT_ALPHABET").GetRawText());
+            _commonFilter.SetLabel(new LocString("card_library", "RARITY_COMMON").GetRawText());
+            _uncommonFilter.SetLabel(new LocString("card_library", "RARITY_UNCOMMON").GetRawText());
+            _rareFilter.SetLabel(new LocString("card_library", "RARITY_RARE").GetRawText());
+            _otherFilter.SetLabel(new LocString("card_library", "RARITY_OTHER").GetRawText());
+            _viewMultiplayerCards.SetLabel(new LocString("card_library", "VIEW_MULTIPLAYER_CARDS").GetRawText());
+            _colorlessFilter.Loc = new LocString("card_library", "POOL_COLORLESS_TIP");
+            _ancientsFilter.Loc = new LocString("card_library", "POOL_ANCIENT_TIP");
+            _miscPoolFilter.Loc = new LocString("card_library", "POOL_MISC_TIP");
+            _attackFilter.Loc = new LocString("card_library", "TYPE_ATTACK_TIP");
+            _skillFilter.Loc = new LocString("card_library", "TYPE_SKILL_TIP");
+            _powerFilter.Loc = new LocString("card_library", "TYPE_POWER_TIP");
+            _otherTypeFilter.Loc = new LocString("card_library", "TYPE_OTHER_TIP");
+            _commonFilter.Loc = new LocString("card_library", "RARITY_COMMON_TIP");
+            _uncommonFilter.Loc = new LocString("card_library", "RARITY_UNCOMMON_TIP");
+            _rareFilter.Loc = new LocString("card_library", "RARITY_RARE_TIP");
+            _otherFilter.Loc = new LocString("card_library", "RARITY_OTHER_TIP");
+            _zeroFilter.Loc = new LocString("card_library", "COST_ZERO_TIP");
+            _oneFilter.Loc = new LocString("card_library", "COST_ONE_TIP");
+            _twoFilter.Loc = new LocString("card_library", "COST_TWO_TIP");
+            _threePlusFilter.Loc = new LocString("card_library", "COST_THREE_TIP");
+            _xFilter.Loc = new LocString("card_library", "COST_X_TIP");
+
             _cardsContainer = GetNode<GridContainer>("RightContainer/CardBox/CardsScroll/CardsContainer");
 
             _confirmButton.Connect(NClickableControl.SignalName.Released, Callable.From<NButton>(OnEmbarkPressed));
@@ -357,11 +608,17 @@ namespace Training.TrainingCode.Screens
 
             var buttonsContainer = GetNode<HBoxContainer>("RightContainer/ButtonsContainer");
             var clearAllButton = new NConfigButton();
-            clearAllButton.Initialize("Clear All", () => { ClearCards(); ClearRelics(); });
+            clearAllButton.Initialize("Clear All", () =>
+            {
+                ClearCards(); ClearRelics();
+            });
             buttonsContainer?.AddChildSafely(clearAllButton);
 
             var setDefaults = new NConfigButton();
-            setDefaults.Initialize("Default Deck", () => { DefaultCards(); ClearRelics(); });
+            setDefaults.Initialize("Default Deck", () =>
+            {
+                DefaultCards(); ClearRelics();
+            });
             buttonsContainer?.AddChildSafely(setDefaults);
 
             RefreshRelics();
