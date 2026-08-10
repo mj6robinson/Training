@@ -1,0 +1,37 @@
+name: Build and push to NexusMods
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+  workflow_dispatch:
+    
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Check out the repo
+      uses: actions/checkout@v5
+
+    - name: Read variable from JSON
+      run: |
+        # Extract "version" from Training.json and save to $GITHUB_ENV
+        VALUE=$(jq -r '.version' Training.json)
+        echo "MY_VERSION=$VALUE" >> $GITHUB_ENV
+
+    - name: Use the variable
+      run: echo "The version is ${{ env.MY_VERSION }}"
+
+    - name: Zip files
+      run: zip -r Training.zip ./dist
+
+    - name: Upload to NexusMods
+      uses: Nexus-Mods/upload-action@v1.0.0-beta.5
+      with:
+        api_key: ${{ secrets.NEXUSMODS_API_KEY }}
+        file_group_id: 7785642
+        filename: Training.zip
+        version: ${{ env.MY_VERSION }}
+        file_category: main # optional

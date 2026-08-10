@@ -12,8 +12,6 @@ namespace Training.TrainingCode.Encounters
         {
         }
 
-        public override bool IsDebugEncounter => true;
-
         public override string BossNodePath => "res://Training/images/" + Id.Entry.ToLowerInvariant();
 
         public override IEnumerable<MonsterModel> AllPossibleMonsters => [];

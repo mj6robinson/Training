@@ -15,7 +15,7 @@ namespace Training.TrainingCode.Modifiers
     {
         public override bool ClearsPlayerDeck => true;
 
-        public List<Tuple<CardModel, bool>> Cards = [];
+        public List<CardModel> Cards = [];
 
         public List<RelicModel> Relics = [];
 
@@ -29,10 +29,16 @@ namespace Training.TrainingCode.Modifiers
         {
             foreach (var player in RunState.Players)
             {
+                var relics = player.Relics.ToList();
+                foreach (var relic in relics)
+                {
+                    RelicCmd.Remove(relic);
+                }
+                
                 foreach (var card in Cards)
                 {
-                    var newCard = RunState.CreateCard(card.Item1, player);
-                    if (card.Item2) newCard.UpgradeInternal();
+                    var newCard = RunState.CreateCard(card.CanonicalInstance, player);
+                    if (card.IsUpgraded) newCard.UpgradeInternal();
                     CardPileCmd.Add(newCard, PileType.Deck);
                 }
             }
@@ -48,7 +54,6 @@ namespace Training.TrainingCode.Modifiers
                     RelicCmd.Obtain(relic.ToMutable(), player);
                 }
             }
-
             return base.AfterActEntered();
         }
 

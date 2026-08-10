@@ -1,5 +1,6 @@
 ﻿using BaseLib.Config;
 using MegaCrit.Sts2.Core.Logging;
+using MegaCrit.Sts2.Core.Models;
 using System.Text.Json;
 
 namespace Training.TrainingCode.Config
@@ -68,31 +69,31 @@ namespace Training.TrainingCode.Config
 
         private static Dictionary<string, int> SelectedCards = [];
 
-        public static bool IsRelicSelected(string relic)
+        public static bool IsRelicSelected(RelicModel relic)
         {
-            return SelectedRelics.Contains(relic);
+            return SelectedRelics.Contains(relic.ToString());
         }
 
-        public static void SelectRelic(string relic, bool selected)
+        public static void SelectRelic(RelicModel relic, bool selected)
         {
-            if (selected && !SelectedRelics.Contains(relic))
+            if (selected && !SelectedRelics.Contains(relic.ToString()))
             {
-                SelectedRelics.Add(relic);
+                SelectedRelics.Add(relic.ToString());
             }
-            if (!selected && SelectedRelics.Contains(relic))
+            if (!selected && SelectedRelics.Contains(relic.ToString()))
             {
-                SelectedRelics.Remove(relic);
+                SelectedRelics.Remove(relic.ToString());
             }
         }
 
-        public static int GetCardValue(string card)
+        public static int GetCardValue(CardModel card)
         {
-            return SelectedCards.GetValueOrDefault(card);
+            return SelectedCards.GetValueOrDefault(card.ToSerializable().ToString());
         }
 
-        public static void SelectCard(string card, int value)
-        {
-            SelectedCards[card] = value;
+        public static void SelectCard(CardModel card, int value)
+        {            
+            SelectedCards[card.ToSerializable().ToString()] = value;
         }
     }
 }

@@ -2,11 +2,9 @@
 using BaseLib.Utils;
 using Godot;
 using MegaCrit.Sts2.Core.Events;
-using MegaCrit.Sts2.Core.Helpers;
 using MegaCrit.Sts2.Core.Localization;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Nodes;
-using MegaCrit.Sts2.Core.Nodes.Screens.PauseMenu;
 using MegaCrit.Sts2.Core.Rooms;
 using MegaCrit.Sts2.Core.Runs;
 using Training.TrainingCode.Acts;
@@ -58,7 +56,7 @@ namespace Training.TrainingCode.Events
 
         private Task BeginTraining()
         {            
-            EnterCombatWithoutExitingEvent(TrainingModifier.Encounter.MutableClone() as EncounterModel, [], true);
+            EnterCombatWithoutExitingEvent(TrainingModifier.Encounter.CanonicalInstance, [], true);
             return Task.CompletedTask;
         }
 
@@ -69,9 +67,11 @@ namespace Training.TrainingCode.Events
 
         public override Task Resume(AbstractRoom exitedRoom)
         {
+            _combatSynchronizer?.ResetState();
+            _combatSynchronizer?.InitializeForEvent(this);
             BeforeEventStarted(false);
             SetInitialEventState(false);
-            RunManager.Instance.CombatReplayWriter.RecordInitialState(RunManager.Instance.ToSave(null));
+            RunManager.Instance.CombatReplayWriter.RecordInitialState(RunManager.Instance.ToSave(null));            
             return base.Resume(exitedRoom);
         }
 

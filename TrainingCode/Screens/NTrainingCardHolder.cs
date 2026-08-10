@@ -1,7 +1,5 @@
 ﻿using Godot;
 using MegaCrit.Sts2.Core.Models;
-using MegaCrit.Sts2.Core.Models.Cards;
-using MegaCrit.Sts2.Core.Models.Relics;
 using MegaCrit.Sts2.Core.Nodes;
 using MegaCrit.Sts2.Core.Nodes.GodotExtensions;
 using MegaCrit.Sts2.Core.Nodes.Screens.RunHistoryScreen;
@@ -14,9 +12,9 @@ namespace Training.TrainingCode.Screens
     {
         public PanelContainer RootNode { get; private set; }
 
-        public CardModel CardModel => _cardModel.Item1;
+        public CardModel CardModel => _cardModel;
 
-        private readonly Tuple<CardModel, bool> _cardModel;
+        private readonly CardModel _cardModel;
 
         private readonly NDeckHistoryEntry _cardEntry;
 
@@ -24,12 +22,11 @@ namespace Training.TrainingCode.Screens
 
         private SpinBox _spinBox;
 
-        public NTrainingCardHolder(Tuple<CardModel, bool> card)
+        public NTrainingCardHolder(CardModel card)
         {
             _cardModel = card;
 
-            var name = $"{card.Item1.Title}";
-            if (card.Item2) name += "+";
+            var name = $"{card.Title}";
 
             RootNode = new PanelContainer
             {
@@ -66,25 +63,20 @@ namespace Training.TrainingCode.Screens
             _spinBox.ValueChanged += OnValueChanged;
             cardBox.AddChild(_spinBox);
 
-            if (card.Item1.ToMutable() is CardModel newCard)
+            _cardEntry = NDeckHistoryEntry.Create(card, 1);
+            _cardEntry.Connect(NDeckHistoryEntry.SignalName.Clicked, Callable.From<NDeckHistoryEntry>(ShowEntry));
+            _cardEntry.Connect(NClickableControl.SignalName.Focused, Callable.From<NClickableControl>(delegate
             {
-                if (card.Item2) newCard.UpgradeInternal();
+                EmitSignal(NDeckHistory.SignalName.Hovered, _cardEntry);
+            }));
+            _cardEntry.Connect(NClickableControl.SignalName.Unfocused, Callable.From<NClickableControl>(delegate
+            {
+                EmitSignal(NDeckHistory.SignalName.Unhovered, _cardEntry);
+            }));
+            cardBox.AddChild(_cardEntry);
 
-                _cardEntry = NDeckHistoryEntry.Create(newCard, 1);
-                _cardEntry.Connect(NDeckHistoryEntry.SignalName.Clicked, Callable.From<NDeckHistoryEntry>(ShowEntry));
-                _cardEntry.Connect(NClickableControl.SignalName.Focused, Callable.From<NClickableControl>(delegate
-                {
-                    EmitSignal(NDeckHistory.SignalName.Hovered, _cardEntry);
-                }));
-                _cardEntry.Connect(NClickableControl.SignalName.Unfocused, Callable.From<NClickableControl>(delegate
-                {
-                    EmitSignal(NDeckHistory.SignalName.Unhovered, _cardEntry);
-                }));
-                cardBox.AddChild(_cardEntry);
-
-                Count = TrainingConfig.GetCardValue(newCard.Title);
-                _spinBox.Value = Count;
-            }
+            Count = TrainingConfig.GetCardValue(CardModel);
+            _spinBox.Value = Count;
         }
 
         public void SetValue(int newValue)
@@ -94,7 +86,7 @@ namespace Training.TrainingCode.Screens
 
         public void Filter(Dictionary<Type, List<Func<CardModel, bool>>> filters)
         {
-            if (filters.All(group => group.Value.Count == 0 || group.Value.Any(filter => filter(_cardModel.Item1))))
+            if (filters.All(group => group.Value.Count == 0 || group.Value.Any(filter => filter(_cardModel))))
             {
                 RootNode.Show();
             }
@@ -106,17 +98,17 @@ namespace Training.TrainingCode.Screens
 
         private void ShowEntry(NDeckHistoryEntry entry)
         {
-            NGame.Instance?.GetInspectCardScreen().Open([_cardModel.Item1], 0);
+            NGame.Instance?.GetInspectCardScreen().Open([_cardModel], 0);
         }
 
         private void OnValueChanged(double value)
         {
             Count = Convert.ToInt32(value);
-            TrainingConfig.SelectCard(_cardEntry.Card.Title, Count);
+            TrainingConfig.SelectCard(_cardEntry.Card, Count);
             NTrainingRunScreen.Config.Save();
         }
 
-        public IEnumerable<Tuple<CardModel, bool>> GetCards()
+        public IEnumerable<CardModel> GetCards()
         {
             return Enumerable.Repeat(_cardModel, Count);
         }

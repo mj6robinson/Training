@@ -49,10 +49,12 @@
     <Compile Remove="materials/**" />
     <Compile Remove="shaders/**" />
     <Compile Remove="images/**" />
+    <Compile Remove="TrainingCode\Extensions\**" />
     <EmbeddedResource Remove="Training/**" />
     <EmbeddedResource Remove="materials/**" />
     <EmbeddedResource Remove="shaders/**" />
     <EmbeddedResource Remove="images/**" />
+    <EmbeddedResource Remove="TrainingCode\Extensions\**" />
   </ItemGroup>
 
   <ItemGroup>
@@ -60,6 +62,8 @@
     <None Include=".gitignore" />
     <None Include="dist\Training.dll" />
     <None Include="dist\Training.pck" />
+    <None Include="Properties\PublishProfiles\FolderProfile.pubxml" />
+    <None Include="Properties\PublishProfiles\FolderProfile.pubxml.user" />
     <None Include="Training.json" />
     <None Include="project.godot" />
     <None Include="Training/**" />
@@ -94,6 +98,7 @@
 
   <ItemGroup>
     <Content Include="dist\Training.json" />
+    <Content Include="Properties\launchSettings.json" />
   </ItemGroup>
 
   <Target Name="GodotPublish" AfterTargets="Publish" Condition="'$(GodotPath)' != '' and Exists('$(GodotPath)') and '$(IsInnerGodotExport)' != 'true'" Inputs="@(GodotResourceFiles)" Outputs="$(ModsPath)$(MSBuildProjectName)/$(MSBuildProjectName).pck">

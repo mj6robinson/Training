@@ -58,7 +58,7 @@ namespace Training.TrainingCode.Patches
 
                 };
                 encountersRoot.AddChild(encountersFilter);
-                
+
 
                 var encountersScrollContainer = new ScrollContainer
                 {
@@ -80,87 +80,28 @@ namespace Training.TrainingCode.Patches
 
                 encountersFilter.TextChanged += (filter) => Filter(encountersContainer, filter);
 
-                var allEncounters = ModelDb.AllEncounters.Select(encounter => new { 
-                    Title = encounter.Title.GetRawText(), 
-                    Icon = ImageHelper.GetRoomIconPath(MapPointType.Monster, encounter.RoomType, encounter.RoomType == RoomType.Boss ? encounter.Id : null), 
-                    Encounter = encounter.ToMutable() 
+                var allEncounters = ModelDb.AllEncounters.Select(encounter => new
+                {
+                    Title = encounter.Title.GetRawText() + (encounter is BattlewornDummyEventEncounter ? $" ({encounter.AllPossibleMonsters.FirstOrDefault().MinInitialHp} HP)" : ""),
+                    Icon = ImageHelper.GetRoomIconPath(ModelDb.EventEncounters.Contains(encounter) ? MapPointType.Unknown : MapPointType.Monster, encounter.RoomType, encounter.RoomType == RoomType.Boss ? encounter.Id : null),
+                    Encounter = encounter
                 }).ToList();
-                if (ModelDb.Encounter<BattlewornDummyEventEncounter>().ToMutable() is BattlewornDummyEventEncounter battleFriendV1)
-                {               
-                    var title = $"{battleFriendV1.Title.GetRawText()} ({ModelDb.Monster<BattleFriendV1>().MinInitialHp} HP)";
-                    battleFriendV1.Setting = BattlewornDummyEventEncounter.DummySetting.Setting1;
-                    allEncounters.Add(new {
-                        Title = title, 
-                        Icon = ImageHelper.GetRoomIconPath(MapPointType.Unknown, battleFriendV1.RoomType, null), 
-                        Encounter = battleFriendV1 as EncounterModel
-                    });
-                }
-                if (ModelDb.Encounter<BattlewornDummyEventEncounter>().ToMutable() is BattlewornDummyEventEncounter battleFriendV2)
-                {
-                    var title = $"{battleFriendV2.Title.GetRawText()} ({ModelDb.Monster<BattleFriendV2>().MinInitialHp} HP)";
-                    battleFriendV2.Setting = BattlewornDummyEventEncounter.DummySetting.Setting2;
-                    allEncounters.Add(new
-                    {
-                        Title = title,
-                        Icon = ImageHelper.GetRoomIconPath(MapPointType.Unknown, battleFriendV2.RoomType, null),
-                        Encounter = battleFriendV2 as EncounterModel
-                    });
-                }
-                if (ModelDb.Encounter<BattlewornDummyEventEncounter>().ToMutable() is BattlewornDummyEventEncounter battleFriendV3)
-                {
-                    var title = $"{battleFriendV3.Title.GetRawText()} ({ModelDb.Monster<BattleFriendV3>().MinInitialHp} HP)";
-                    battleFriendV3.Setting = BattlewornDummyEventEncounter.DummySetting.Setting3;
-                    allEncounters.Add(new
-                    {
-                        Title = title,
-                        Icon = ImageHelper.GetRoomIconPath(MapPointType.Unknown, battleFriendV3.RoomType, null),
-                        Encounter = battleFriendV3 as EncounterModel
-                    });
-                }
 
-                if (ModelDb.Encounter<DenseVegetationEventEncounter>().ToMutable() is DenseVegetationEventEncounter denseVegetation)
+                var denseVegetation = ModelDb.Encounter<DenseVegetationEventEncounter>();
+                allEncounters.Add(new
                 {
-                    var title = denseVegetation.Title.GetRawText();
-                    allEncounters.Add(new
-                    {
-                        Title = title,
-                        Icon = ImageHelper.GetRoomIconPath(MapPointType.Unknown, denseVegetation.RoomType, null),
-                        Encounter = denseVegetation as EncounterModel
-                    });
-                }
+                    Title = denseVegetation.Title.GetRawText(),
+                    Icon = ImageHelper.GetRoomIconPath(MapPointType.Unknown, denseVegetation.RoomType, null),
+                    Encounter = denseVegetation as EncounterModel
+                });
 
-                if (ModelDb.Encounter<FakeMerchantEventEncounter>().ToMutable() is FakeMerchantEventEncounter fakeMerchant)
+                var punchOff = ModelDb.Encounter<PunchOffEventEncounter>();
+                allEncounters.Add(new
                 {
-                    var title = fakeMerchant.Title.GetRawText();
-                    allEncounters.Add(new
-                    {
-                        Title = title,
-                        Icon = ImageHelper.GetRoomIconPath(MapPointType.Unknown, fakeMerchant.RoomType, null),
-                        Encounter = fakeMerchant as EncounterModel
-                    });
-                }
-
-                if (ModelDb.Encounter<MysteriousKnightEventEncounter>().ToMutable() is MysteriousKnightEventEncounter mysteriousKnight)
-                {
-                    var title = mysteriousKnight.Title.GetRawText();
-                    allEncounters.Add(new
-                    {
-                        Title = title,
-                        Icon = ImageHelper.GetRoomIconPath(MapPointType.Unknown, mysteriousKnight.RoomType, null),
-                        Encounter = mysteriousKnight as EncounterModel
-                    });
-                }
-
-                if (ModelDb.Encounter<MysteriousKnightEventEncounter>().ToMutable() is PunchOffEventEncounter punchOff)
-                {
-                    var title = punchOff.Title.GetRawText();
-                    allEncounters.Add(new
-                    {
-                        Title = title,
-                        Icon = ImageHelper.GetRoomIconPath(MapPointType.Unknown, punchOff.RoomType, null),
-                        Encounter = punchOff as EncounterModel
-                    });
-                }
+                    Title = punchOff.Title.GetRawText(),
+                    Icon = ImageHelper.GetRoomIconPath(MapPointType.Unknown, punchOff.RoomType, null),
+                    Encounter = punchOff as EncounterModel
+                });
 
                 foreach (var encounter in allEncounters.OrderBy(p => p.Title))
                 {
@@ -176,7 +117,7 @@ namespace Training.TrainingCode.Patches
                     encountersContainer.AddChild(button);
 
                     button.Pressed += () => EncounterClicked(button, encounter.Encounter);
-                    if (TrainingModifier.Encounter == encounter.Encounter)
+                    if (TrainingModifier.Encounter.Id == encounter.Encounter.Id)
                     {
                         CurrentButton = button;
                         button.AddThemeStyleboxOverride("normal", HighlightStyle);
@@ -199,7 +140,7 @@ namespace Training.TrainingCode.Patches
                     PlaceholderText = "Filter",
                     SizeFlagsHorizontal = SizeFlags.ExpandFill,
                 };
-                potionsRoot.AddChild(potionsFilter); 
+                potionsRoot.AddChild(potionsFilter);
 
                 var potionScrollContainer = new ScrollContainer
                 {
@@ -280,7 +221,7 @@ namespace Training.TrainingCode.Patches
 
         public static void Filter(GridContainer container, string filter)
         {
-            foreach(var button in container.GetChildrenRecursive<Button>())
+            foreach (var button in container.GetChildrenRecursive<Button>())
             {
                 if (button.Name.ToString().Contains(filter, StringComparison.CurrentCultureIgnoreCase))
                 {

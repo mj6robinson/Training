@@ -32,7 +32,6 @@ using System.Globalization;
 using Training.TrainingCode.Acts;
 using Training.TrainingCode.Config;
 using Training.TrainingCode.Modifiers;
-using static Godot.OpenXRCompositionLayer;
 
 namespace Training.TrainingCode.Screens
 {
@@ -113,9 +112,7 @@ namespace Training.TrainingCode.Screens
 
         private NLibraryStatTickbox _viewMultiplayerCards;
 
-        private readonly List<SortingOrders> _sortingPriority = [];
-
-        protected List<CardModel> _cards = [.. ModelDb.AllCards];
+        protected List<CardModel> _cards = ModelDb.AllCards.Select(card => card.ToMutable()).Union(ModelDb.AllCards.Where(card => card.IsUpgradable).Select(card => { var upgrade = card.ToMutable(); upgrade.UpgradeInternal(); return upgrade; })).ToList();
 
         private readonly Dictionary<Type, List<Func<CardModel, bool>>> _filter = [];
 
@@ -126,56 +123,6 @@ namespace Training.TrainingCode.Screens
         private MultiplayerUiMode _uiMode;
 
         public StartRunLobby Lobby => _lobby;
-
-        private Dictionary<SortingOrders, Func<CardModel, CardModel, int>> SortingAlgorithms
-        {
-            get
-            {
-                return new Dictionary<SortingOrders, Func<CardModel, CardModel, int>>
-                {
-                    {
-                        SortingOrders.RarityAscending,
-                        (a, b) => GetCardRarityComparisonValue(a).CompareTo(GetCardRarityComparisonValue(b))
-                    },
-                    {
-                        SortingOrders.CostAscending,
-                        (a, b) => a.EnergyCost.GetResolved().CompareTo(b.EnergyCost.GetResolved())
-                    },
-                    {
-                        SortingOrders.TypeAscending,
-                        (a, b) => a.Type.CompareTo(b.Type)
-                    },
-                    {
-                        SortingOrders.AlphabetAscending,
-                        (a, b) => string.Compare(a.Title, b.Title, LocManager.Instance.CultureInfo, CompareOptions.None)
-                    },
-                    {
-                        SortingOrders.RarityDescending,
-                        (a, b) => -GetCardRarityComparisonValue(a).CompareTo(GetCardRarityComparisonValue(b))
-                    },
-                    {
-                        SortingOrders.CostDescending,
-                        (a, b) => -a.EnergyCost.GetResolved().CompareTo(b.EnergyCost.GetResolved())
-                    },
-                    {
-                        SortingOrders.TypeDescending,
-                        (a, b) => -a.Type.CompareTo(b.Type)
-                    },
-                    {
-                        SortingOrders.AlphabetDescending,
-                        (a, b) => -string.Compare(a.Title, b.Title, LocManager.Instance.CultureInfo, CompareOptions.None)
-                    },
-                    {
-                        SortingOrders.Ascending,
-                        (a, b) => _cards.IndexOf(a).CompareTo(_cards.IndexOf(b))
-                    },
-                    {
-                        SortingOrders.Descending,
-                        (a, b) => -_cards.IndexOf(a).CompareTo(_cards.IndexOf(b))
-                    }
-                };
-            }
-        }
 
         private static int GetCardRarityComparisonValue(CardModel a)
         {
@@ -360,64 +307,75 @@ namespace Training.TrainingCode.Screens
 
         private void FilterCards()
         {
-            foreach (NTrainingCardHolder holder in _cardsContainer.GetChildrenRecursive<PanelContainer>().Where(holder => holder.HasMeta("controller")).Select(holder => (NTrainingCardHolder)holder.GetMeta("controller")))
+            foreach (NTrainingCardHolder holder in _cardsContainer.GetChildren().Where(holder => holder.HasMeta("controller")).Select(holder => (NTrainingCardHolder)holder.GetMeta("controller")))
             {
                 holder.Filter(_filter);
             }
         }
 
-        private void DefaultCards()
-        {
-            foreach (NTrainingCardHolder holder in _cardsContainer.GetChildrenRecursive<PanelContainer>().Where(holder => holder.HasMeta("controller")).Select(holder => (NTrainingCardHolder)holder.GetMeta("controller")))
-            {
-                holder.SetValue(_lobby.LocalPlayer.character.StartingDeck.Count(card => card.Id == holder.CardModel.Id));
-            }
-        }
-
         private void ClearCards()
         {
-            foreach (NTrainingCardHolder holder in _cardsContainer.GetChildrenRecursive<PanelContainer>().Where(holder => holder.HasMeta("controller")).Select(holder => (NTrainingCardHolder)holder.GetMeta("controller")))
+            foreach (NTrainingCardHolder holder in _cardsContainer.GetChildren().Where(holder => holder.HasMeta("controller")).Select(holder => (NTrainingCardHolder)holder.GetMeta("controller")))
             {
                 holder.SetValue(0);
             }
         }
 
-        private void RefreshCards()
+        private void SortCards(Func<CardModel, CardModel, int> sort)
         {
-            foreach (Node child in _cardsContainer.GetChildrenRecursive<PanelContainer>().Where(holder => holder.HasMeta("controller")))
+            _cards.Sort((x, y) => sort(x, y));
+            RefreshCards();
+        }
+
+        private void RefreshCards(bool redraw = false)
+        {
+            if (redraw)
             {
-                child.QueueFree();
+                foreach (var child in _cardsContainer.GetChildren().Where(holder => holder.HasMeta("controller")))
+                {
+                    child.QueueFree();
+                }
+
+                foreach (var card in _cards)
+                {
+                    var holder = new NTrainingCardHolder(card);
+                    _cardsContainer.AddChild(holder.RootNode);
+                }
             }
-
-            _cards.Sort((x, y) =>
-                {
-                    foreach (var item in _sortingPriority)
-                    {
-                        int num = SortingAlgorithms[item](x, y);
-                        if (num != 0)
-                        {
-                            return num;
-                        }
-                    }
-                    return x.Id.CompareTo(y.Id);
-                });
-
-            foreach (var card in _cards)
+            else
             {
-                var holder = new NTrainingCardHolder(new Tuple<CardModel, bool>(card, false));
-                _cardsContainer.AddChild(holder.RootNode);
-                if (card.IsUpgradable)
+                var children = _cardsContainer.GetChildren().Where(c => c.HasMeta("controller")).ToList();
+                for (int i = 0; i < _cards.Count; i++)
                 {
-                    var holderPlus = new NTrainingCardHolder(new Tuple<CardModel, bool>(card, true));
-                    _cardsContainer.AddChild(holderPlus.RootNode);
+                    var child = children.First(holder => ((NTrainingCardHolder)holder.GetMeta("controller")).CardModel == _cards[i]);
+                    _cardsContainer.MoveChild(child, i);
                 }
             }
             FilterCards();
         }
 
-        private List<Tuple<CardModel, bool>> GetSelectedCards()
+        private List<CardModel> GetSelectedCards()
         {
-            return [.. _cardsContainer.GetChildrenRecursive<PanelContainer>().Where(holder => holder.HasMeta("controller")).SelectMany(holder => ((NTrainingCardHolder)holder.GetMeta("controller")).GetCards())];
+            return [.. _cardsContainer.GetChildren().Where(holder => holder.HasMeta("controller")).SelectMany(holder => ((NTrainingCardHolder)holder.GetMeta("controller")).GetCards())];
+        }
+
+        private void SetDefaults()
+        {
+            ClearCards();
+            ClearRelics();
+            foreach (var holder in _cardsContainer.GetChildren().Where(holder => holder.HasMeta("controller")).Select(holder => (NTrainingCardHolder)holder.GetMeta("controller")))
+            {
+                holder.SetValue(_lobby.LocalPlayer.character.StartingDeck.Count(card =>
+                {
+                    return card.Id == holder.CardModel.Id && !holder.CardModel.IsUpgraded;
+                }));
+            }
+
+            foreach (var relic in _lobby.LocalPlayer.character.StartingRelics)
+            {
+                var holder = _relicsContainer.GetChildrenRecursive<NRelicBasicHolder>().First(holder => holder.Relic.Model.Id == relic.Id);
+                if (!holder.HasMeta("selected") || !holder.GetMeta("selected").AsBool()) RelicClicked(holder);
+            }
         }
 
         private void FilterRelics(string filter)
@@ -448,9 +406,12 @@ namespace Training.TrainingCode.Screens
             foreach (var relic in ModelDb.AllRelics)
             {
                 var holder = NRelicBasicHolder.Create(relic);
-                _relicsContainer.AddChild(holder);
-                if (TrainingConfig.IsRelicSelected(holder.Relic.Model.Title.GetRawText())) RelicClicked(holder);
-                holder?.Connect(NClickableControl.SignalName.Released, Callable.From<NRelicBasicHolder>(RelicClicked));
+                if (holder != null)
+                {
+                    _relicsContainer.AddChild(holder);
+                    if (TrainingConfig.IsRelicSelected(holder.Relic.Model)) RelicClicked(holder);
+                    holder.Connect(NClickableControl.SignalName.Released, Callable.From<NRelicBasicHolder>(RelicClicked));
+                }
             }
         }
 
@@ -463,8 +424,8 @@ namespace Training.TrainingCode.Screens
         {
             var selected = !relicHolder.HasMeta("selected") || !relicHolder.GetMeta("selected").AsBool();
             relicHolder.SetMeta("selected", selected);
-            TrainingConfig.SelectRelic(relicHolder.Relic.Model.Title.GetRawText(), selected);
-            NTrainingRunScreen.Config.Save();
+            TrainingConfig.SelectRelic(relicHolder.Relic.Model, selected);
+            Config.Save();
             relicHolder.Relic.Outline.SelfModulate = selected ? new Color(1f, 0.784f, 0f, 0.98f) : new Color(0f, 0f, 0f, 0.501961f);
         }
 
@@ -506,7 +467,7 @@ namespace Training.TrainingCode.Screens
             _miscPoolFilter.Connect(NCardPoolFilter.SignalName.Toggled, Callable.From<NCardPoolFilter>(filter => FilterCards(filter.GetType(), filter.IsSelected, card => (card.Rarity - CardRarity.Ancient) > 0)));
 
             _typeSorter = GetNode<NCardViewSortButton>("RightContainer/CardBox/Sidebar/MarginContainer/TopVBox/CardTypeModule/CardTypeSorter");
-            _typeSorter.Connect(NClickableControl.SignalName.Released, Callable.From<NButton>((filter) => RefreshCards()));
+            _typeSorter.Connect(NClickableControl.SignalName.Released, Callable.From<NCardViewSortButton>((filter) => SortCards((a, b) => a.Type.CompareTo(b.Type) * (filter.IsDescending ? 1 : -1))));
 
             _attackFilter = GetNode<NCardTypeTickbox>("RightContainer/CardBox/Sidebar/MarginContainer/TopVBox/CardTypeModule/CardTypeToggler/AttackType");
             _skillFilter = GetNode<NCardTypeTickbox>("RightContainer/CardBox/Sidebar/MarginContainer/TopVBox/CardTypeModule/CardTypeToggler/SkillType");
@@ -524,7 +485,7 @@ namespace Training.TrainingCode.Screens
             _otherTypeFilter.Connect(NCardTypeTickbox.SignalName.Toggled, Callable.From<NCardTypeTickbox>(filter => FilterCards(filter.GetType(), filter.IsTicked, card => (card.Type - CardType.Power) > 0)));
 
             _raritySorter = GetNode<NCardViewSortButton>("RightContainer/CardBox/Sidebar/MarginContainer/TopVBox/RarityModule/RaritySorter");
-            _raritySorter.Connect(NClickableControl.SignalName.Released, Callable.From<NButton>((filter) => RefreshCards()));
+            _raritySorter.Connect(NClickableControl.SignalName.Released, Callable.From<NCardViewSortButton>((filter) => SortCards((a, b) => GetCardRarityComparisonValue(a).CompareTo(GetCardRarityComparisonValue(b) * (filter.IsDescending ? 1 : -1)))));
 
             _commonFilter = GetNode<NCardRarityTickbox>("RightContainer/CardBox/Sidebar/MarginContainer/TopVBox/RarityModule/RarityToggler/CommonRarity");
             _uncommonFilter = GetNode<NCardRarityTickbox>("RightContainer/CardBox/Sidebar/MarginContainer/TopVBox/RarityModule/RarityToggler/UncommonRarity");
@@ -542,7 +503,7 @@ namespace Training.TrainingCode.Screens
             _otherFilter.Connect(NTickbox.SignalName.Toggled, Callable.From<NCardRarityTickbox>((filter) => FilterCards(filter.GetType(), filter.IsTicked, card => (card.Rarity - CardRarity.Rare) > 0)));
 
             _costSorter = GetNode<NCardViewSortButton>("RightContainer/CardBox/Sidebar/MarginContainer/TopVBox/CostModule/CostSorter");
-            _costSorter.Connect(NClickableControl.SignalName.Released, Callable.From<NButton>((filter) => RefreshCards()));
+            _costSorter.Connect(NClickableControl.SignalName.Released, Callable.From<NCardViewSortButton>((filter) => SortCards((a, b) => a.EnergyCost.GetResolved().CompareTo(b.EnergyCost.GetResolved() * (filter.IsDescending ? 1 : -1)))));
 
             _zeroFilter = GetNode<NCardCostTickbox>("RightContainer/CardBox/Sidebar/MarginContainer/TopVBox/CostModule/CostToggler/Cost0");
             _oneFilter = GetNode<NCardCostTickbox>("RightContainer/CardBox/Sidebar/MarginContainer/TopVBox/CostModule/CostToggler/Cost1");
@@ -563,7 +524,7 @@ namespace Training.TrainingCode.Screens
             _xFilter.Connect(NClickableControl.SignalName.Released, Callable.From<NCardCostTickbox>((filter) => FilterCards(filter.GetType(), filter.IsTicked, card => card.EnergyCost.CostsX || card.HasStarCostX)));
 
             _alphabetSorter = GetNode<NCardViewSortButton>("RightContainer/CardBox/Sidebar/MarginContainer/TopVBox/AlphabetSorter");
-            _alphabetSorter.Connect(NClickableControl.SignalName.Released, Callable.From<NButton>((filter) => RefreshCards()));
+            _alphabetSorter.Connect(NClickableControl.SignalName.Released, Callable.From<NCardViewSortButton>((filter) => SortCards((a, b) => string.Compare(a.Title, b.Title, LocManager.Instance.CultureInfo, CompareOptions.None) * (filter.IsDescending ? 1 : -1))));
 
             _viewMultiplayerCards = GetNode<NLibraryStatTickbox>("RightContainer/CardBox/Sidebar/MarginContainer/BottomVBox/MultiplayerCards");
             _viewMultiplayerCards.IsTicked = true;
@@ -614,15 +575,15 @@ namespace Training.TrainingCode.Screens
             });
             buttonsContainer?.AddChildSafely(clearAllButton);
 
-            var setDefaults = new NConfigButton();
-            setDefaults.Initialize("Default Deck", () =>
+            var defaults = new NConfigButton();
+            defaults.Initialize("Defaults", () =>
             {
-                DefaultCards(); ClearRelics();
+                SetDefaults();
             });
-            buttonsContainer?.AddChildSafely(setDefaults);
+            buttonsContainer?.AddChildSafely(defaults);
 
             RefreshRelics();
-            RefreshCards();
+            RefreshCards(true);
         }
 
         public override void OnSubmenuOpened()
@@ -648,7 +609,7 @@ namespace Training.TrainingCode.Screens
                 _ascensionPanel.SetAscensionLevel(_lobby.Ascension);
             }
 
-            foreach (LobbyPlayer player in _lobby.Players)
+            foreach (var player in _lobby.Players)
             {
                 RefreshButtonSelectionForPlayer(player);
             }
@@ -814,12 +775,12 @@ namespace Training.TrainingCode.Screens
             }
         }
 
-        public void PlayerConnected(LobbyPlayer player)
+        public void PlayerConnected(StartRunLobbyPlayer player)
         {
             RefreshButtonSelectionForPlayer(player);
         }
 
-        public void PlayerChanged(LobbyPlayer player, bool isRandomCharacterResolution)
+        public void PlayerChanged(StartRunLobbyPlayer player, bool isRandomCharacterResolution)
         {
             if (isRandomCharacterResolution)
             {
@@ -828,7 +789,7 @@ namespace Training.TrainingCode.Screens
             RefreshButtonSelectionForPlayer(player);
         }
 
-        private void RefreshButtonSelectionForPlayer(LobbyPlayer player)
+        private void RefreshButtonSelectionForPlayer(StartRunLobbyPlayer player)
         {
             if (player.id == _lobby.LocalPlayer.id)
             {
@@ -863,7 +824,7 @@ namespace Training.TrainingCode.Screens
             _ascensionPanel.SetMaxAscension(_lobby.MaxAscension);
         }
 
-        public void RemotePlayerDisconnected(LobbyPlayer player)
+        public void RemotePlayerDisconnected(StartRunLobbyPlayer player)
         {
         }
 
