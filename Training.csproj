@@ -35,7 +35,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Alchyr.Sts2.BaseLib" Version="3.4.0" />
+    <PackageReference Include="Alchyr.Sts2.BaseLib" Version="3.4.5" />
     <PackageReference Include="Krafs.Publicizer" Version="2.3.2" PrivateAssets="All" />
     <PackageReference Include="Alchyr.Sts2.ModAnalyzers" Version="*" />
     <!-- Generates a .pck file when building if only using simple assets. May not work on all setups. Uncomment to test. -->

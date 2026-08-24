@@ -1,5 +1,6 @@
 ﻿using HarmonyLib;
 using MegaCrit.Sts2.Core.Nodes.Screens.PauseMenu;
+using MegaCrit.Sts2.Core.Runs;
 
 namespace Training.TrainingCode.Patches
 {
@@ -7,10 +8,13 @@ namespace Training.TrainingCode.Patches
     class NPauseMenuPatch
     {
         [HarmonyPostfix]
-        [HarmonyPatch(nameof(NPauseMenu._Ready))]
-        public static void _Ready(ref NPauseMenuButton ____giveUpButton)
+        [HarmonyPatch(nameof(NPauseMenu.Initialize))]
+        public static void Initialize(IRunState runState, ref NPauseMenuButton ____giveUpButton)
         {
-            ____giveUpButton.Hide();
+            if (runState.GameMode == GameMode.None)
+            {
+                ____giveUpButton.Hide();
+            }
         }
     }
 }
