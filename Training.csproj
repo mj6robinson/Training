@@ -58,12 +58,13 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Condition="Exists('Directory.Build.props')" Include="Directory.Build.props" />
     <None Include=".gitignore" />
+    <None Include="Directory.Build.props" />
     <None Include="dist\Training.dll" />
     <None Include="dist\Training.pck" />
     <None Include="Properties\PublishProfiles\FolderProfile.pubxml" />
     <None Include="Properties\PublishProfiles\FolderProfile.pubxml.user" />
+    <None Include="Sts2PathDiscovery.props" />
     <None Include="Training.json" />
     <None Include="project.godot" />
     <None Include="Training/**" />
